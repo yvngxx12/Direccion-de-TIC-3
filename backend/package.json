@@ -1,0 +1,24 @@
+{
+  "name": "indicador-audiencia-backend",
+  "version": "1.0.0",
+  "description": "Proyecto C - Indicador mecanico de audiencia: servomotor que sigue los espectadores simultaneos de un stream",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test --test-reporter=spec \"test/**/*.test.js\"",
+    "emulador": "node tools/emulador-esp.js",
+    "probar-stream": "node tools/probar-stream.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^5.1.0",
+    "socket.io": "^4.8.1"
+  },
+  "optionalDependencies": {
+    "serialport": "^13.0.0"
+  }
+}

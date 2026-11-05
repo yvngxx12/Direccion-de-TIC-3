@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Overlay Audiencia</title>
+    <style>
+        :root {
+            --acento: #22d3ee;
+            --texto: #ffffff;
+            --fondo: rgba(10, 14, 22, 0.72);
+            --escala: 1;
+        }
+        html, body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: transparent;
+            font-family: "Segoe UI", system-ui, sans-serif;
+        }
+        .overlay {
+            position: absolute;
+            left: 24px;
+            top: 24px;
+            width: 340px;
+            padding: 16px 18px 14px;
+            border-radius: 18px;
+            background: var(--fondo);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: var(--texto);
+            transform: scale(var(--escala));
+            transform-origin: top left;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+        }
+        .titulo {
+            font-size: 12px;
+            letter-spacing: 2.5px;
+            font-weight: 700;
+            opacity: 0.75;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .vivo {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            letter-spacing: 1px;
+        }
+        .vivo i {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #64748b;
+        }
+        .vivo.on i { background: #ef4444; box-shadow: 0 0 8px #ef4444; animation: latido 1.4s infinite; }
+        @keyframes latido { 50% { opacity: 0.35; } }
+
+        .medidor-svg { width: 100%; display: block; margin-top: 4px; }
+        .medidor-pista { fill: none; stroke: rgba(255, 255, 255, 0.1); stroke-width: 16; stroke-linecap: round; }
+        .medidor-zona { display: none; }
+        .medidor-relleno { fill: none; stroke: var(--acento); stroke-width: 16; stroke-linecap: round; filter: drop-shadow(0 0 8px var(--acento)); }
+        .tick { stroke: rgba(255, 255, 255, 0.25); stroke-width: 1.2; }
+        .tick.mayor { stroke: rgba(255, 255, 255, 0.6); stroke-width: 2; }
+        .tick-texto { fill: var(--texto); opacity: 0.7; font-size: 10px; font-family: inherit; }
+        .medidor-aguja-cuerpo { fill: var(--texto); filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6)); }
+        .medidor-eje { fill: #0f172a; stroke: var(--texto); stroke-width: 2; }
+        .medidor-eje-centro { fill: var(--acento); }
+
+        .pie { display: flex; justify-content: space-between; align-items: baseline; margin-top: -4px; }
+        .numero { font-size: 40px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -1px; transition: transform 0.2s; }
+        .numero.pulso { transform: scale(1.06); }
+        .tendencia { font-size: 15px; font-weight: 700; }
+        .tendencia.subiendo { color: #4ade80; }
+        .tendencia.bajando { color: #f87171; }
+        .tendencia.estable { opacity: 0.6; }
+        .oculto { display: none !important; }
+    </style>
+</head>
+<body>
+    <div class="overlay" id="overlay">
+        <div class="titulo">
+            <span id="titulo">ESPECTADORES</span>
+            <span class="vivo" id="vivo"><i></i><span id="vivoTexto">OFFLINE</span></span>
+        </div>
+        <div id="medidor"></div>
+        <div class="pie">
+            <span class="numero" id="numero">—</span>
+            <span class="tendencia" id="tendencia"></span>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="gauge.js"></script>
+    <script>
+        // Overlay para OBS (Browser Source). Fondo transparente.
+        // Parámetros opcionales en la URL: ?x=24&y=24 para la posición.
+        const $ = (id) => document.getElementById(id);
+        const medidor = new Medidor($("medidor"));
+        const socket = io();
+        const params = new URLSearchParams(location.search);
+        if (params.has("x")) $("overlay").style.left = `${Number(params.get("x"))}px`;
+        if (params.has("y")) $("overlay").style.top = `${Number(params.get("y"))}px`;
+
+        let ultimoNumero = null;
+        let estiloActual = {};
+
+        function aplicarEstilo(estilo) {
+            estiloActual = estilo;
+            const raiz = document.documentElement.style;
+            raiz.setProperty("--acento", estilo.colorAcento);
+            raiz.setProperty("--texto", estilo.colorTexto);
+            raiz.setProperty("--fondo", estilo.colorFondo);
+            raiz.setProperty("--escala", estilo.escala);
+            $("titulo").textContent = estilo.titulo;
+            $("numero").classList.toggle("oculto", !estilo.mostrarNumero);
+            $("tendencia").classList.toggle("oculto", !estilo.mostrarTendencia);
+        }
+
+        function mostrarLectura(l, mapeo, rango) {
+            if (mapeo) medidor.actualizarEscala(mapeo, (l && l.rango) || rango);
+            if (!l) {
+                $("vivo").classList.remove("on");
+                $("vivoTexto").textContent = "OFFLINE";
+                $("numero").textContent = "—";
+                $("tendencia").textContent = "";
+                ultimoNumero = null;
+                if (ultimoEstado && ultimoEstado.servo.ultimoComando) medidor.fijarObjetivo(ultimoEstado.servo.ultimoComando.angle);
+                return;
+            }
+            const enVivo = l.enVivo && l.viewers !== null;
+            $("vivo").classList.toggle("on", enVivo);
+            $("vivoTexto").textContent = enVivo ? "EN VIVO" : "OFFLINE";
+            if (l.angulo !== null && l.angulo !== undefined) medidor.fijarObjetivo(l.angulo);
+
+            const texto = enVivo ? Number(l.viewers).toLocaleString("es-AR") : "—";
+            if (texto !== ultimoNumero) {
+                $("numero").textContent = texto;
+                $("numero").classList.add("pulso");
+                setTimeout(() => $("numero").classList.remove("pulso"), 200);
+                ultimoNumero = texto;
+            }
+            const t = l.tendencia;
+            const el = $("tendencia");
+            if (enVivo && t) {
+                el.className = `tendencia ${t.direccion}${estiloActual.mostrarTendencia === false ? " oculto" : ""}`;
+                el.textContent = `${{ subiendo: "▲", bajando: "▼", estable: "■" }[t.direccion]} ${Math.abs(t.cambio)}%`;
+            } else {
+                el.textContent = "";
+            }
+        }
+
+        let ultimoEstado = null;
+        socket.on("estado", (e) => {
+            ultimoEstado = e;
+            aplicarEstilo(e.estilo);
+            // En calibración, la aguja del overlay sigue al servo real.
+            const l = e.monitor.ultimaLectura;
+            if (e.servo.calibrando && e.servo.ultimoComando) {
+                medidor.fijarObjetivo(e.servo.ultimoComando.angle);
+                medidor.actualizarEscala(e.mapeo, e.rango);
+            } else {
+                mostrarLectura(l, e.mapeo, e.rango);
+            }
+        });
+        socket.on("lectura", (l) => mostrarLectura(l, ultimoEstado && ultimoEstado.mapeo, ultimoEstado && ultimoEstado.rango));
+        socket.on("estilo", aplicarEstilo);
+    </script>
+</body>
+</html>

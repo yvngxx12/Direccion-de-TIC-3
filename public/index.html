@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Indicador de Audiencia · Panel</title>
+    <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+    <header class="barra">
+        <div class="marca">
+            <span class="marca-icono" aria-hidden="true">◐</span>
+            <div>
+                <h1>Indicador Mecánico de Audiencia</h1>
+                <p>Proyecto C · Dirección de TIC</p>
+            </div>
+        </div>
+        <div class="chips">
+            <span class="chip" id="chipSocket"><i></i>Servidor</span>
+            <span class="chip" id="chipStream"><i></i>Stream</span>
+            <span class="chip" id="chipPlaca"><i></i>Placa</span>
+        </div>
+    </header>
+
+    <main class="grilla">
+        <!-- =================== COLUMNA PRINCIPAL =================== -->
+        <section class="tarjeta tarjeta-medidor">
+            <div class="tarjeta-cabecera">
+                <h2>Aguja en vivo</h2>
+                <span class="sub" id="fuenteActual">Sin fuente conectada</span>
+            </div>
+            <div class="medidor" id="medidor"></div>
+            <div class="lectura">
+                <div class="lectura-numero">
+                    <span id="numViewers">—</span>
+                    <small>espectadores</small>
+                </div>
+                <div class="lectura-datos">
+                    <div><span class="etq">Ángulo servo</span><b id="numAngulo">—</b></div>
+                    <div><span class="etq">Escala</span><b id="numPorcentaje">—</b></div>
+                    <div><span class="etq">Tendencia</span><b id="numTendencia">—</b></div>
+                    <div><span class="etq">Pico sesión</span><b id="numPico">—</b></div>
+                </div>
+            </div>
+            <p class="aviso oculto" id="aviso"></p>
+            <div class="titulo-stream" id="tituloStream"></div>
+
+            <div class="grafico">
+                <div class="grafico-cabecera">
+                    <h3>Historial</h3>
+                    <span class="leyenda"><i class="l-viewers"></i>Espectadores <i class="l-angulo"></i>Ángulo</span>
+                </div>
+                <canvas id="grafico" height="160"></canvas>
+            </div>
+
+            <div class="estadisticas">
+                <div><span class="etq">Lecturas</span><b id="estLecturas">0</b></div>
+                <div><span class="etq">Errores API</span><b id="estErrores">0</b></div>
+                <div><span class="etq">Latencia API</span><b id="estLatApi">—</b></div>
+                <div><span class="etq">Latencia placa</span><b id="estLatPlaca">—</b></div>
+                <div><span class="etq">Intervalo</span><b id="estIntervalo">—</b></div>
+            </div>
+        </section>
+
+        <!-- =================== COLUMNA DE CONTROLES =================== -->
+        <div class="columna">
+            <section class="tarjeta">
+                <div class="tarjeta-cabecera"><h2>1 · Fuente del stream</h2></div>
+                <form id="formStream" class="fila">
+                    <input id="entradaStream" type="text" placeholder="Link de YouTube / Twitch, @canal o “simulador”" autocomplete="off" required>
+                    <button type="submit" class="primario" id="btnConectar">Conectar</button>
+                </form>
+                <p class="ayuda" id="ayudaEntrada">Ej.: https://www.youtube.com/watch?v=… · https://youtube.com/@canal · https://twitch.tv/canal</p>
+                <div class="fila botones">
+                    <button type="button" id="btnLeer">Leer ahora</button>
+                    <button type="button" id="btnDetener" class="peligro">Detener</button>
+                </div>
+                <div class="google" id="bloqueGoogle">
+                    <div class="google-info">
+                        <b>YouTube con cuenta de Google</b>
+                        <span class="sub" id="googleEstado">Comprobando…</span>
+                    </div>
+                    <a class="boton primario" id="btnGoogle" href="/auth/google">Iniciar sesión con Google</a>
+                    <button type="button" id="btnGoogleSalir" class="oculto">Cerrar sesión</button>
+                </div>
+                <details class="credenciales">
+                    <summary>Credenciales de API <span id="credEstado" class="sub"></span></summary>
+                    <form id="formCred" class="pila">
+                        <label>YouTube Data API v3 key
+                            <input id="credYoutube" type="password" placeholder="AIza…" autocomplete="off">
+                        </label>
+                        <label>Twitch Client ID
+                            <input id="credTwitchId" type="text" autocomplete="off">
+                        </label>
+                        <label>Twitch Client Secret
+                            <input id="credTwitchSecret" type="password" autocomplete="off">
+                        </label>
+                        <button type="submit">Guardar en memoria</button>
+                        <p class="ayuda">Para que queden guardadas, ponelas en <code>backend/.env</code>.</p>
+                    </form>
+                </details>
+            </section>
+
+            <section class="tarjeta">
+                <div class="tarjeta-cabecera"><h2>2 · Simulador (sin stream)</h2></div>
+                <div class="escenarios" id="escenarios"></div>
+                <div class="fila">
+                    <input id="manualViewers" type="range" min="0" max="2000" step="10" value="300">
+                    <output id="manualSalida">300</output>
+                </div>
+                <div class="fila botones">
+                    <button type="button" id="btnFijar">Fijar valor</button>
+                    <button type="button" id="btnSoltar">Volver al escenario</button>
+                    <button type="button" id="btnOffline">Simular offline</button>
+                </div>
+            </section>
+
+            <section class="tarjeta">
+                <div class="tarjeta-cabecera"><h2>3 · Calibración del mapeo</h2></div>
+                <form id="formMapeo" class="grilla-form">
+                    <label>Modo
+                        <select name="modo">
+                            <option value="lineal">Lineal</option>
+                            <option value="logaritmico">Logarítmico</option>
+                            <option value="auto">Automático (aprende el rango)</option>
+                        </select>
+                    </label>
+                    <label>Sin señal
+                        <select name="sinSenal">
+                            <option value="minimo">Aguja al mínimo</option>
+                            <option value="mantener">Mantener posición</option>
+                        </select>
+                    </label>
+                    <label>Espectadores mín.<input name="viewersMin" type="number" min="0" step="1"></label>
+                    <label>Espectadores máx.<input name="viewersMax" type="number" min="1" step="1"></label>
+                    <label>Ángulo mín. (°)<input name="anguloMin" type="number" min="0" max="180"></label>
+                    <label>Ángulo máx. (°)<input name="anguloMax" type="number" min="0" max="180"></label>
+                    <label>Suavizado <output id="salSuavizado"></output>
+                        <input name="suavizado" type="range" min="0.05" max="1" step="0.05">
+                    </label>
+                    <label>Zona muerta (°)<input name="zonaMuerta" type="number" min="0" max="45"></label>
+                    <label>Intervalo API (s)<input name="intervaloS" type="number" min="2" step="1"></label>
+                    <label class="check"><input name="invertir" type="checkbox"> Invertir sentido</label>
+                    <button type="submit" class="primario ancho">Aplicar calibración</button>
+                </form>
+                <p class="ayuda">Suavizado 1 = reacciona al instante · 0.2 = muy suave. La zona muerta evita que el servo tiemble.</p>
+            </section>
+
+            <section class="tarjeta">
+                <div class="tarjeta-cabecera"><h2>4 · Placa ESP8266 + servo</h2></div>
+                <form id="formPlaca" class="pila">
+                    <div class="segmentado" role="radiogroup">
+                        <label><input type="radio" name="tipo" value="http" checked> WiFi</label>
+                        <label><input type="radio" name="tipo" value="serial"> USB</label>
+                    </div>
+                    <label class="solo-http">IP de la placa
+                        <input id="placaIp" type="text" placeholder="192.168.1.50 (o 127.0.0.1:4310 con el emulador)">
+                    </label>
+                    <div class="solo-serial oculto fila">
+                        <select id="placaPuerto"><option value="">Elegí un puerto…</option></select>
+                        <button type="button" id="btnPuertos" title="Buscar puertos">↻</button>
+                    </div>
+                    <div class="fila botones">
+                        <button type="submit" class="primario">Conectar placa</button>
+                        <button type="button" id="btnDesconectarPlaca">Desconectar</button>
+                    </div>
+                </form>
+                <p class="ayuda" id="placaDetalle">Sin placa: la aguja de esta pantalla funciona igual.</p>
+                <div class="calibracion">
+                    <label class="check"><input type="checkbox" id="chkCalibrar"> Modo calibración (mover a mano)</label>
+                    <div class="fila">
+                        <input id="anguloManual" type="range" min="0" max="180" value="90" disabled>
+                        <output id="anguloManualSalida">90°</output>
+                    </div>
+                    <div class="fila botones">
+                        <button type="button" data-angulo="0" class="btn-angulo" disabled>0°</button>
+                        <button type="button" data-angulo="90" class="btn-angulo" disabled>90°</button>
+                        <button type="button" data-angulo="180" class="btn-angulo" disabled>180°</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="tarjeta">
+                <div class="tarjeta-cabecera"><h2>5 · Overlay para OBS</h2></div>
+                <form id="formEstilo" class="grilla-form">
+                    <label>Título<input name="titulo" type="text" maxlength="40"></label>
+                    <label>Escala<input name="escala" type="number" min="0.3" max="3" step="0.1"></label>
+                    <label>Color acento<input name="colorAcento" type="color"></label>
+                    <label>Color texto<input name="colorTexto" type="color"></label>
+                    <label class="check"><input name="mostrarNumero" type="checkbox"> Mostrar número</label>
+                    <label class="check"><input name="mostrarTendencia" type="checkbox"> Mostrar tendencia</label>
+                    <button type="submit" class="primario ancho">Aplicar estilo</button>
+                </form>
+                <div class="fila url-overlay">
+                    <code id="urlOverlay"></code>
+                    <button type="button" id="btnCopiar">Copiar</button>
+                </div>
+                <p class="ayuda">En OBS: Fuentes → + → Navegador → pegar la URL · 600 × 400.</p>
+            </section>
+
+            <section class="tarjeta">
+                <div class="tarjeta-cabecera"><h2>Registro</h2></div>
+                <ol class="log" id="log"></ol>
+            </section>
+        </div>
+    </main>
+
+    <div class="toast oculto" id="toast" role="status"></div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="gauge.js"></script>
+    <script src="panel.js"></script>
+</body>
+</html>

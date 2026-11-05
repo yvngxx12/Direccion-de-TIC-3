@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "indicador-audiencia",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["backend/src/server.js"],
+      "port": 4300
+    },
+    {
+      "name": "emulador-placa",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["backend/tools/emulador-esp.js", "4310"],
+      "port": 4310
+    }
+  ]
+}
